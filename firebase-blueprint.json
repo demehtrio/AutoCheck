@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "vehicle": {
+      "title": "Vehicle",
+      "description": "A police vehicle in the fleet",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Vehicle internal ID" },
+        "plate": { "type": "string", "description": "License plate" },
+        "model": { "type": "string", "description": "Vehicle model" },
+        "prefix": { "type": "string", "description": "Vehicle prefix (e.g. PM-1234)" },
+        "status": { "type": "string", "enum": ["available", "in_use", "maintenance"], "description": "Current status" },
+        "lastMileage": { "type": "number", "description": "Last recorded mileage" }
+      },
+      "required": ["id", "plate", "model", "status"]
+    },
+    "checklistEntry": {
+      "title": "Checklist Entry",
+      "description": "A record of a vehicle checklist (Identification, Drivers, Mileage)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Record ID" },
+        "vehicleId": { "type": "string", "description": "Reference to vehicle ID" },
+        "type": { "type": "string", "enum": ["check-out", "check-in"], "description": "Type of operation" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When the operation occurred" },
+        "userEmail": { "type": "string", "format": "email", "description": "User who performed the operation" },
+        
+        "identification": {
+          "type": "object",
+          "properties": {
+            "prefix": { "type": "string" },
+            "plate": { "type": "string" },
+            "model": { "type": "string" },
+            "date": { "type": "string" }
+          }
+        },
+        "drivers": {
+          "type": "object",
+          "properties": {
+            "driverName": { "type": "string" },
+            "driverRank": { "type": "string" },
+            "commanderName": { "type": "string" }
+          }
+        },
+        "mileage": {
+          "type": "object",
+          "properties": {
+            "currentMileage": { "type": "number" },
+            "notes": { "type": "string" }
+          }
+        }
+      },
+      "required": ["vehicleId", "type", "timestamp", "userEmail"]
+    }
+  },
+  "firestore": {
+    "/vehicles/{vehicleId}": {
+      "schema": "vehicle",
+      "description": "Collection of vehicles"
+    },
+    "/checklists/{checklistId}": {
+      "schema": "checklistEntry",
+      "description": "Collection of vehicle checklists"
+    }
+  }
+}

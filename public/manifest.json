@@ -1,0 +1,17 @@
+{
+  "name": "AutoCheck - 14º BPM",
+  "short_name": "AutoCheck",
+  "description": "Sistema de Check-in e Check-out de Viaturas do 14º BPM - PMPE",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#003366",
+  "theme_color": "#003366",
+  "icons": [
+    {
+      "src": "https://i.pinimg.com/originals/25/fe/68/25fe6812a14bafd836f89d73a5b96663.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

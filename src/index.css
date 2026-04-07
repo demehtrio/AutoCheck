@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@theme {
+  --color-pmpe-blue: #003399;
+  --color-pmpe-red: #E30613;
+  --color-pmpe-gold: #FFD700;
+  --color-pmpe-dark: #001F5C;
+}
