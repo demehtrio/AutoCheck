@@ -28,6 +28,7 @@ import {
   AlertCircle, 
   ChevronRight, 
   ArrowLeftRight,
+  ExternalLink,
   Shield,
   Clock,
   User as UserIcon,
@@ -208,6 +209,7 @@ export default function App() {
   });
 
   const [submitting, setSubmitting] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'history'>('list');
@@ -492,25 +494,46 @@ export default function App() {
           )}
           
           <button 
+            disabled={isLoggingIn}
             onClick={async () => {
               setLoginError(null);
+              setIsLoggingIn(true);
               try {
                 await loginWithGoogle();
               } catch (err: any) {
+                console.error('Login error:', err);
                 if (err.code === 'auth/popup-blocked') {
                   setLoginError('O popup de login foi bloqueado pelo seu navegador. Por favor, permita popups para este site.');
                 } else if (err.code === 'auth/unauthorized-domain') {
-                  setLoginError('Este domínio não está autorizado no Firebase. Adicione os domínios do AI Studio nas configurações de Autenticação do Firebase.');
+                  setLoginError('Este domínio não está autorizado no Firebase. Tente abrir o app em uma nova aba usando o botão abaixo.');
+                } else if (err.code === 'auth/popup-closed-by-user') {
+                  setLoginError('A janela de login foi fechada antes de completar o acesso.');
                 } else {
-                  setLoginError('Ocorreu um erro inesperado ao tentar fazer login. Tente novamente ou abra o app em uma nova aba.');
+                  setLoginError('Ocorreu um erro ao tentar fazer login. Tente abrir o app em uma nova aba.');
                 }
+              } finally {
+                setIsLoggingIn(false);
               }
             }}
-            className="w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-200 hover:border-pmpe-blue text-slate-700 font-semibold py-3 px-6 rounded-xl transition-all active:scale-95"
+            className={`w-full flex items-center justify-center gap-3 bg-white border-2 border-slate-200 hover:border-pmpe-blue text-slate-700 font-semibold py-3 px-6 rounded-xl transition-all active:scale-95 ${isLoggingIn ? 'opacity-70 cursor-not-allowed' : ''}`}
           >
-            <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
-            Entrar com Google
+            {isLoggingIn ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-pmpe-blue"></div>
+            ) : (
+              <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
+            )}
+            {isLoggingIn ? 'Acessando...' : 'Entrar com Google'}
           </button>
+
+          {loginError && (
+            <button 
+              onClick={() => window.open(window.location.href, '_blank')}
+              className="mt-4 w-full flex items-center justify-center gap-2 text-pmpe-blue hover:underline text-sm font-bold"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Abrir em Nova Aba (Recomendado)
+            </button>
+          )}
           
           <p className="mt-8 text-xs text-pmpe-red uppercase tracking-widest font-black">
             Acesso Restrito a Policiais Militares
