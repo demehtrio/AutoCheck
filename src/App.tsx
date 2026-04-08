@@ -40,7 +40,8 @@ import {
   ChevronDown,
   ChevronUp,
   Save,
-  Search
+  Search,
+  Share2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
@@ -422,6 +423,43 @@ export default function App() {
     });
   };
 
+  const formatWhatsAppMessage = (record: RecordEntry) => {
+    const driverFormatted = record.drivers.driverName.replace(/ (\d)/, ' / $1');
+    const dateFormatted = record.identification.date.split('-').reverse().join('/');
+    
+    const messageBody = record.type === 'check-in' 
+      ? `✅ *CHECK-IN VIATURA*\n` +
+        `🪙 *Pat:* ${record.identification.prefix}\n` +
+        `⛔ *Placa:* ${record.identification.plate}\n` +
+        `📟 *Prefixo:* ${record.identification.operationalPrefix || '---'}\n` +
+        `🧮 *Emprego:* ${record.drivers.serviceType || '---'}\n` +
+        `🚓 *Vtr:* ${record.identification.model}\n` +
+        `🔓 *Km inic:* ${record.mileage.currentMileage}\n` +
+        `📅 *Data:* ${dateFormatted}\n` +
+        `⌚ *Hora que armou:* ${record.identification.time}\n` +
+        `👮🏻‍♂️ *Condutor/Mat:* ${driverFormatted}`
+      : `🏁 *CHECK-OUT VIATURA*\n` +
+        `🪙 *Pat:* ${record.identification.prefix}\n` +
+        `⛔ *Placa:* ${record.identification.plate}\n` +
+        `📟 *Prefixo:* ${record.identification.operationalPrefix || '---'}\n` +
+        `🧮 *Emprego:* ${record.drivers.serviceType || '---'}\n` +
+        `🚓 *Vtr:* ${record.identification.model}\n` +
+        `🔐 *Km final:* ${record.mileage.currentMileage}\n` +
+        `📅 *Data:* ${dateFormatted}\n` +
+        `⌚ *Hora que desarmou:* ${record.identification.time}\n` +
+        `👮🏻‍♂️ *Condutor/Mat:* ${driverFormatted}`;
+    
+    return record.mileage.notes 
+      ? `${messageBody}\n\n📝 *Obs:* ${record.mileage.notes}`
+      : messageBody;
+  };
+
+  const handleResendWhatsApp = (record: RecordEntry) => {
+    const message = formatWhatsAppMessage(record);
+    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   const handleSaveRecord = async () => {
     if (!selectedVehicle || !operationType || !user) return;
 
@@ -455,33 +493,18 @@ export default function App() {
       });
 
       // Format WhatsApp Message
-      const driverFormatted = formData.drivers.driverName.replace(/ (\d)/, ' / $1');
-      
-      const messageBody = operationType === 'check-in' 
-        ? `✅ *CHECK-IN VIATURA*\n` +
-          `🪙 *Pat:* ${formData.identification.prefix}\n` +
-          `⛔ *Placa:* ${formData.identification.plate}\n` +
-          `📟 *Prefixo:* ${formData.identification.operationalPrefix || '---'}\n` +
-          `🧮 *Emprego:* ${formData.drivers.serviceType || '---'}\n` +
-          `🚓 *Vtr:* ${formData.identification.model}\n` +
-          `🔓 *Km inic:* ${formData.mileage.currentMileage}\n` +
-          `📅 *Data:* ${formData.identification.date.split('-').reverse().join('/')}\n` +
-          `⌚ *Hora que armou:* ${formData.identification.time}\n` +
-          `👮🏻‍♂️ *Condutor/Mat:* ${driverFormatted}`
-        : `🏁 *CHECK-OUT VIATURA*\n` +
-          `🪙 *Pat:* ${formData.identification.prefix}\n` +
-          `⛔ *Placa:* ${formData.identification.plate}\n` +
-          `📟 *Prefixo:* ${formData.identification.operationalPrefix || '---'}\n` +
-          `🧮 *Emprego:* ${formData.drivers.serviceType || '---'}\n` +
-          `🚓 *Vtr:* ${formData.identification.model}\n` +
-          `🔐 *Km final:* ${formData.mileage.currentMileage}\n` +
-          `📅 *Data:* ${formData.identification.date.split('-').reverse().join('/')}\n` +
-          `⌚ *Hora que desarmou:* ${formData.identification.time}\n` +
-          `👮🏻‍♂️ *Condutor/Mat:* ${driverFormatted}`;
-      
-      const finalMessage = formData.mileage.notes 
-        ? `${messageBody}\n\n📝 *Obs:* ${formData.mileage.notes}`
-        : messageBody;
+      const recordToFormat: RecordEntry = {
+        ...formData,
+        id: '', // Not needed for formatting
+        vehicleId: selectedVehicle.id,
+        type: operationType!,
+        userId: user.uid,
+        userEmail: user.email || '',
+        userName: user.displayName || '',
+        timestamp: new Date()
+      };
+
+      const finalMessage = formatWhatsAppMessage(recordToFormat);
 
       // Open WhatsApp using the most compatible API
       const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(finalMessage)}`;
@@ -954,18 +977,31 @@ export default function App() {
                                   </div>
                                 )}
 
-                                {canConclude && (
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleStartRecord(vehicle, 'check-out');
-                                    }}
-                                    className="w-full py-3 bg-pmpe-red text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-pmpe-red/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
-                                  >
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    Concluir (Check-out)
-                                  </button>
-                                )}
+                                  <div className="flex gap-2">
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleResendWhatsApp(record);
+                                      }}
+                                      className="flex-1 py-3 bg-green-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-green-600/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    >
+                                      <Share2 className="w-4 h-4" />
+                                      Reenviar WhatsApp
+                                    </button>
+
+                                    {canConclude && (
+                                      <button 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStartRecord(vehicle, 'check-out');
+                                        }}
+                                        className="flex-[1.5] py-3 bg-pmpe-red text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-lg shadow-pmpe-red/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                                      >
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        Concluir (Check-out)
+                                      </button>
+                                    )}
+                                  </div>
                               </div>
                             </motion.div>
                           )}
