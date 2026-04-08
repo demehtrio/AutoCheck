@@ -455,39 +455,37 @@ export default function App() {
       });
 
       // Format WhatsApp Message
-      let message = '';
       const driverFormatted = formData.drivers.driverName.replace(/ (\d)/, ' / $1');
       
-      if (operationType === 'check-in') {
-        message = `✅ *CHECK-IN VIATURA*%0A` +
-          `🪙 *Pat:* ${formData.identification.prefix}%0A` +
-          `⛔ *Placa:* ${formData.identification.plate}%0A` +
-          `📟 *Prefixo:* ${formData.identification.operationalPrefix || '---'}%0A` +
-          `🧮 *Emprego:* ${formData.drivers.serviceType || '---'}%0A` +
-          `🚓 *Vtr:* ${formData.identification.model}%0A` +
-          `🔓 *Km inic:* ${formData.mileage.currentMileage}%0A` +
-          `📅 *Data:* ${formData.identification.date.split('-').reverse().join('/')}%0A` +
-          `⌚ *Hora que armou:* ${formData.identification.time}%0A` +
+      const messageBody = operationType === 'check-in' 
+        ? `✅ *CHECK-IN VIATURA*\n` +
+          `🪙 *Pat:* ${formData.identification.prefix}\n` +
+          `⛔ *Placa:* ${formData.identification.plate}\n` +
+          `📟 *Prefixo:* ${formData.identification.operationalPrefix || '---'}\n` +
+          `🧮 *Emprego:* ${formData.drivers.serviceType || '---'}\n` +
+          `🚓 *Vtr:* ${formData.identification.model}\n` +
+          `🔓 *Km inic:* ${formData.mileage.currentMileage}\n` +
+          `📅 *Data:* ${formData.identification.date.split('-').reverse().join('/')}\n` +
+          `⌚ *Hora que armou:* ${formData.identification.time}\n` +
+          `👮🏻‍♂️ *Condutor/Mat:* ${driverFormatted}`
+        : `🏁 *CHECK-OUT VIATURA*\n` +
+          `🪙 *Pat:* ${formData.identification.prefix}\n` +
+          `⛔ *Placa:* ${formData.identification.plate}\n` +
+          `📟 *Prefixo:* ${formData.identification.operationalPrefix || '---'}\n` +
+          `🧮 *Emprego:* ${formData.drivers.serviceType || '---'}\n` +
+          `🚓 *Vtr:* ${formData.identification.model}\n` +
+          `🔐 *Km final:* ${formData.mileage.currentMileage}\n` +
+          `📅 *Data:* ${formData.identification.date.split('-').reverse().join('/')}\n` +
+          `⌚ *Hora que desarmou:* ${formData.identification.time}\n` +
           `👮🏻‍♂️ *Condutor/Mat:* ${driverFormatted}`;
-      } else {
-        message = `🏁 *CHECK-OUT VIATURA*%0A` +
-          `🪙 *Pat:* ${formData.identification.prefix}%0A` +
-          `⛔ *Placa:* ${formData.identification.plate}%0A` +
-          `📟 *Prefixo:* ${formData.identification.operationalPrefix || '---'}%0A` +
-          `🧮 *Emprego:* ${formData.drivers.serviceType || '---'}%0A` +
-          `🚓 *Vtr:* ${formData.identification.model}%0A` +
-          `🔐 *Km final:* ${formData.mileage.currentMileage}%0A` +
-          `📅 *Data:* ${formData.identification.date.split('-').reverse().join('/')}%0A` +
-          `⌚ *Hora que desarmou:* ${formData.identification.time}%0A` +
-          `👮🏻‍♂️ *Condutor/Mat:* ${driverFormatted}`;
-      }
+      
+      const finalMessage = formData.mileage.notes 
+        ? `${messageBody}\n\n📝 *Obs:* ${formData.mileage.notes}`
+        : messageBody;
 
-      if (formData.mileage.notes) {
-        message += `%0A%0A📝 *Obs:* ${formData.mileage.notes}`;
-      }
-
-      // Open WhatsApp
-      window.open(`https://wa.me/?text=${message}`, '_blank');
+      // Open WhatsApp using the most compatible API
+      const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(finalMessage)}`;
+      window.open(whatsappUrl, '_blank');
 
       // Reset form
       setSelectedVehicle(null);
