@@ -37,6 +37,8 @@ import {
   Users,
   MapPin,
   ChevronLeft,
+  ChevronDown,
+  ChevronUp,
   Save,
   Search
 } from 'lucide-react';
@@ -215,6 +217,7 @@ export default function App() {
   const [view, setView] = useState<'list' | 'history'>('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'check-out' | 'check-in'>('all');
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
   // Auth listener
   useEffect(() => {
@@ -772,58 +775,105 @@ export default function App() {
                   return filteredHistory.map((record) => {
                     const vehicle = vehicles.find(v => v.id === record.vehicleId);
                     const canConclude = record.type === 'check-in' && vehicle?.status === 'in_use';
+                    const isExpanded = expandedHistoryId === record.id;
 
                     return (
-                      <div key={record.id} className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex items-start gap-4">
-                        <div className={`p-2 rounded-lg shrink-0 ${record.type === 'check-in' ? 'bg-blue-50 text-pmpe-blue' : 'bg-red-50 text-pmpe-red'}`}>
-                          {record.type === 'check-in' ? <ArrowLeftRight className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start mb-1">
-                            <div className="min-w-0">
-                              <h4 className="font-bold text-slate-900 truncate">
-                                {record.identification.plate} ({record.identification.prefix})
-                              </h4>
-                              <div className="flex items-center gap-2">
-                                <p className="text-[10px] font-black text-pmpe-blue uppercase">
-                                  {record.identification.operationalPrefix || 'SEM PREFIXO OP.'}
-                                </p>
-                                <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase ${record.type === 'check-in' ? 'bg-blue-100 text-pmpe-blue' : 'bg-red-100 text-pmpe-red'}`}>
-                                  {record.type === 'check-in' ? 'IN' : 'OUT'}
+                      <div 
+                        key={record.id} 
+                        className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all ${isExpanded ? 'ring-2 ring-pmpe-blue/20' : ''}`}
+                      >
+                        <div 
+                          onClick={() => setExpandedHistoryId(isExpanded ? null : record.id)}
+                          className="p-4 flex items-start gap-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                        >
+                          <div className={`p-2 rounded-lg shrink-0 ${record.type === 'check-in' ? 'bg-blue-50 text-pmpe-blue' : 'bg-red-50 text-pmpe-red'}`}>
+                            {record.type === 'check-in' ? <ArrowLeftRight className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start mb-1">
+                              <div className="min-w-0">
+                                <h4 className="font-bold text-slate-900 truncate">
+                                  {record.identification.plate} ({record.identification.prefix})
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-[10px] font-black text-pmpe-blue uppercase">
+                                    {record.identification.operationalPrefix || 'SEM PREFIXO OP.'}
+                                  </p>
+                                  <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase ${record.type === 'check-in' ? 'bg-blue-100 text-pmpe-blue' : 'bg-red-100 text-pmpe-red'}`}>
+                                    {record.type === 'check-in' ? 'IN' : 'OUT'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="text-[10px] text-slate-400 font-mono">
+                                  {record.timestamp?.toDate ? format(record.timestamp.toDate(), "dd/MM/yy HH:mm", { locale: ptBR }) : '...'}
                                 </span>
+                                {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-300" /> : <ChevronDown className="w-4 h-4 text-slate-300" />}
                               </div>
                             </div>
-                            <span className="text-[10px] text-slate-400 font-mono flex flex-col items-end">
-                              <span>{record.timestamp?.toDate ? format(record.timestamp.toDate(), "dd/MM/yy HH:mm", { locale: ptBR }) : '...'}</span>
-                              <span className="opacity-60">Reg: {record.identification.time}</span>
-                            </span>
+                            <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500">
+                              <span className="flex items-center gap-1">
+                                <UserIcon className="w-3 h-3" />
+                                {record.drivers.driverName}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Gauge className="w-3 h-3" />
+                                {record.mileage.currentMileage} KM
+                              </span>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 mb-2">
-                            <span className="flex items-center gap-1">
-                              <UserIcon className="w-3 h-3" />
-                              {record.drivers.driverName}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Gauge className="w-3 h-3" />
-                              {record.mileage.currentMileage} KM
-                            </span>
-                          </div>
-                          {record.mileage.notes && (
-                            <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded italic mb-3">
-                              "{record.mileage.notes}"
-                            </p>
-                          )}
-                          
-                          {canConclude && (
-                            <button 
-                              onClick={() => handleStartRecord(vehicle, 'check-out')}
-                              className="w-full mt-2 py-2 bg-pmpe-red/10 text-pmpe-red text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-pmpe-red hover:text-white transition-all flex items-center justify-center gap-2 border border-pmpe-red/20"
-                            >
-                              <CheckCircle2 className="w-3 h-3" />
-                              Concluir (Check-out)
-                            </button>
-                          )}
                         </div>
+
+                        <AnimatePresence>
+                          {isExpanded && (
+                            <motion.div 
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="border-t border-slate-100 bg-slate-50/50"
+                            >
+                              <div className="p-4 space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-1">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Modelo</p>
+                                    <p className="text-xs font-bold text-slate-700">{record.identification.model}</p>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Data/Hora Registro</p>
+                                    <p className="text-xs font-bold text-slate-700">{record.identification.date} às {record.identification.time}</p>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Registrado por</p>
+                                  <p className="text-xs font-bold text-slate-700">{record.userEmail}</p>
+                                </div>
+
+                                {record.mileage.notes && (
+                                  <div className="space-y-1">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Observações</p>
+                                    <p className="text-xs text-slate-600 italic bg-white p-3 rounded-xl border border-slate-200">
+                                      "{record.mileage.notes}"
+                                    </p>
+                                  </div>
+                                )}
+
+                                {canConclude && (
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStartRecord(vehicle, 'check-out');
+                                    }}
+                                    className="w-full py-3 bg-pmpe-red text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-lg shadow-pmpe-red/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-2"
+                                  >
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    Concluir (Check-out)
+                                  </button>
+                                )}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     );
                   });
