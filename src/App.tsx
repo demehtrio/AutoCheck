@@ -216,7 +216,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'history'>('list');
   const [searchTerm, setSearchTerm] = useState('');
-  const [historyFilter, setHistoryFilter] = useState<'all' | 'check-out' | 'check-in'>('all');
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'check-out' | 'check-in' | 'maintenance'>('all');
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
   // Auth listener
@@ -334,6 +334,31 @@ export default function App() {
       await updateDoc(doc(db, 'vehicles', vehicle.id), {
         status: newStatus
       });
+
+      // Record this action in the history
+      if (user) {
+        await addDoc(collection(db, 'checklists'), {
+          vehicleId: vehicle.id,
+          type: newStatus === 'maintenance' ? 'maintenance-in' : 'maintenance-out',
+          timestamp: serverTimestamp(),
+          userEmail: user.email,
+          identification: {
+            plate: vehicle.plate,
+            prefix: vehicle.prefix || 'RESERVA',
+            model: vehicle.model,
+            operationalPrefix: 'MANUTENÇÃO',
+            date: format(new Date(), 'yyyy-MM-dd'),
+            time: format(new Date(), 'HH:mm')
+          },
+          drivers: {
+            driverName: 'SISTEMA / MANUTENÇÃO'
+          },
+          mileage: {
+            currentMileage: vehicle.lastMileage,
+            notes: newStatus === 'maintenance' ? 'Viatura baixada para manutenção.' : 'Viatura liberada da manutenção.'
+          }
+        });
+      }
     } catch (err) {
       console.error("Error updating vehicle status:", err);
       setError("Erro ao atualizar status da viatura.");
@@ -366,7 +391,7 @@ export default function App() {
     setCurrentTab(type === 'check-out' ? 2 : 0);
     setFormData({
       identification: {
-        prefix: vehicle.prefix || '',
+        prefix: vehicle.prefix || 'RESERVA',
         operationalPrefix: lastCheckIn?.identification.operationalPrefix || '',
         plate: vehicle.plate,
         model: vehicle.model,
@@ -645,7 +670,7 @@ export default function App() {
                   const filtered = vehicles.filter(v => 
                     (v.status === 'available' || v.status === 'in_use' || v.status === 'maintenance') && (
                       (v.plate?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-                      (v.prefix?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
+                      (v.prefix?.toLowerCase() || "reserva").includes(searchTerm.toLowerCase()) ||
                       (v.model?.toLowerCase() || "").includes(searchTerm.toLowerCase())
                     )
                   );
@@ -674,7 +699,12 @@ export default function App() {
                             {vehicle.status === 'maintenance' ? <AlertCircle className="w-6 h-6" /> : <Car className="w-6 h-6" />}
                           </div>
                           <div>
-                            <h3 className="text-lg font-bold text-slate-900">{vehicle.plate}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-lg font-bold text-slate-900">{vehicle.plate}</h3>
+                              <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase">
+                                {vehicle.prefix || 'RESERVA'}
+                              </span>
+                            </div>
                             <p className="text-sm text-slate-500">{vehicle.model}</p>
                             {vehicle.status === 'in_use' && vehicle.currentDriver && (
                               <p className="text-xs font-medium text-pmpe-red mt-1 flex items-center gap-1">
@@ -756,12 +786,20 @@ export default function App() {
                   >
                     Check-out
                   </button>
+                  <button 
+                    onClick={() => setHistoryFilter('maintenance')}
+                    className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${historyFilter === 'maintenance' ? 'bg-amber-500 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200'}`}
+                  >
+                    Manutenção
+                  </button>
                 </div>
 
                 {(() => {
-                  const filteredHistory = history.filter(record => 
-                    historyFilter === 'all' || record.type === historyFilter
-                  );
+                  const filteredHistory = history.filter(record => {
+                    if (historyFilter === 'all') return true;
+                    if (historyFilter === 'maintenance') return record.type.includes('maintenance');
+                    return record.type === historyFilter;
+                  });
 
                   if (filteredHistory.length === 0) {
                     return (
@@ -786,21 +824,34 @@ export default function App() {
                           onClick={() => setExpandedHistoryId(isExpanded ? null : record.id)}
                           className="p-4 flex items-start gap-4 cursor-pointer hover:bg-slate-50 transition-colors"
                         >
-                          <div className={`p-2 rounded-lg shrink-0 ${record.type === 'check-in' ? 'bg-blue-50 text-pmpe-blue' : 'bg-red-50 text-pmpe-red'}`}>
-                            {record.type === 'check-in' ? <ArrowLeftRight className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
+                          <div className={`p-2 rounded-lg shrink-0 ${
+                            record.type === 'check-in' ? 'bg-blue-50 text-pmpe-blue' : 
+                            record.type.includes('maintenance') ? 'bg-amber-50 text-amber-600' :
+                            'bg-red-50 text-pmpe-red'
+                          }`}>
+                            {record.type === 'check-in' ? <ArrowLeftRight className="w-5 h-5" /> : 
+                             record.type.includes('maintenance') ? <AlertCircle className="w-5 h-5" /> :
+                             <CheckCircle2 className="w-5 h-5" />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-start mb-1">
                               <div className="min-w-0">
                                 <h4 className="font-bold text-slate-900 truncate">
-                                  {record.identification.plate} ({record.identification.prefix})
+                                  {record.identification.plate} ({record.identification.prefix || 'RESERVA'})
                                 </h4>
                                 <div className="flex items-center gap-2">
                                   <p className="text-[10px] font-black text-pmpe-blue uppercase">
                                     {record.identification.operationalPrefix || 'SEM PREFIXO OP.'}
                                   </p>
-                                  <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase ${record.type === 'check-in' ? 'bg-blue-100 text-pmpe-blue' : 'bg-red-100 text-pmpe-red'}`}>
-                                    {record.type === 'check-in' ? 'IN' : 'OUT'}
+                                  <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase ${
+                                    record.type === 'check-in' ? 'bg-blue-100 text-pmpe-blue' : 
+                                    record.type.includes('maintenance') ? 'bg-amber-100 text-amber-600' :
+                                    'bg-red-100 text-pmpe-red'
+                                  }`}>
+                                    {record.type === 'check-in' ? 'IN' : 
+                                     record.type === 'maintenance-in' ? 'BAIXA' :
+                                     record.type === 'maintenance-out' ? 'ALTA' :
+                                     'OUT'}
                                   </span>
                                 </div>
                               </div>
@@ -811,15 +862,21 @@ export default function App() {
                                 {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-300" /> : <ChevronDown className="w-4 h-4 text-slate-300" />}
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500">
-                              <span className="flex items-center gap-1">
-                                <UserIcon className="w-3 h-3" />
-                                {record.drivers.driverName}
+                            <div className="grid grid-cols-1 gap-1 text-[10px] text-slate-500">
+                              <span className="flex items-center gap-1 font-medium text-pmpe-blue truncate">
+                                <Shield className="w-3 h-3" />
+                                Operador: {record.userEmail}
                               </span>
-                              <span className="flex items-center gap-1">
-                                <Gauge className="w-3 h-3" />
-                                {record.mileage.currentMileage} KM
-                              </span>
+                              <div className="grid grid-cols-2 gap-2">
+                                <span className="flex items-center gap-1">
+                                  <UserIcon className="w-3 h-3" />
+                                  {record.drivers.driverName}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <Gauge className="w-3 h-3" />
+                                  {record.mileage.currentMileage} KM
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
