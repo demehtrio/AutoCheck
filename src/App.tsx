@@ -57,6 +57,7 @@ interface Vehicle {
   status: 'available' | 'in_use' | 'maintenance';
   lastMileage: number;
   currentDriver?: string;
+  currentDriverEmail?: string;
 }
 
 interface RecordEntry {
@@ -261,7 +262,11 @@ export default function App() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const recordList: RecordEntry[] = [];
       snapshot.forEach((doc) => {
-        recordList.push({ id: doc.id, ...doc.data() } as RecordEntry);
+        const data = doc.data() as RecordEntry;
+        // Individualize history: only show own records unless admin
+        if (isAdmin || data.userEmail === user.email) {
+          recordList.push({ id: doc.id, ...data } as RecordEntry);
+        }
       });
       setHistory(recordList);
     });
@@ -438,7 +443,8 @@ export default function App() {
       await updateDoc(doc(db, 'vehicles', selectedVehicle.id), {
         status: operationType === 'check-in' ? 'in_use' : 'available',
         lastMileage: formData.mileage.currentMileage,
-        currentDriver: operationType === 'check-in' ? formData.drivers.driverName : null
+        currentDriver: operationType === 'check-in' ? formData.drivers.driverName : null,
+        currentDriverEmail: operationType === 'check-in' ? user.email : null
       });
 
       // Format WhatsApp Message
@@ -731,7 +737,10 @@ export default function App() {
                         </div>
                       </div>
                       
-                      {(vehicle.status === 'available' || (isAdmin && vehicle.status === 'maintenance')) && (
+                      {(vehicle.status === 'available' || 
+                        (isAdmin && vehicle.status === 'maintenance') ||
+                        (vehicle.status === 'in_use' && (isAdmin || vehicle.currentDriverEmail === user?.email))
+                      ) && (
                         <div className="bg-slate-50 px-5 py-3 flex gap-2 border-t border-slate-100">
                           {vehicle.status === 'available' && (
                             <button 
@@ -740,6 +749,15 @@ export default function App() {
                             >
                               <ArrowLeftRight className="w-4 h-4" />
                               Check-in (Retirada)
+                            </button>
+                          )}
+                          {vehicle.status === 'in_use' && (isAdmin || vehicle.currentDriverEmail === user?.email) && (
+                            <button 
+                              onClick={() => handleStartRecord(vehicle, 'check-out')}
+                              className="flex-1 bg-pmpe-red text-white py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              Check-out (Devolução)
                             </button>
                           )}
                           {isAdmin && (
@@ -815,7 +833,9 @@ export default function App() {
 
                   return filteredHistory.map((record) => {
                     const vehicle = vehicles.find(v => v.id === record.vehicleId);
-                    const canConclude = record.type === 'check-in' && vehicle?.status === 'in_use';
+                    const canConclude = record.type === 'check-in' && 
+                                      vehicle?.status === 'in_use' && 
+                                      (isAdmin || record.userEmail === user?.email);
                     const isExpanded = expandedHistoryId === record.id;
 
                     return (
