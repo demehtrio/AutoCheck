@@ -77,6 +77,7 @@ interface RecordEntry {
   };
   drivers: {
     driverName: string;
+    serviceType: string;
   };
   mileage: {
     currentMileage: number;
@@ -140,6 +141,10 @@ const DRIVERS_LIST = [
   "SD G MORAES 123750-0", "SD AMARILDO 120559-5", "SD CLAUDEMIRO 125666-1", "SD BRITO 121828-0", "3º SGT PM CARLOS 109053-4",
   "3°sgt Rogério 108554-9", "CB ANA LIMA 1139738", "3º SGT CLECIO 110880-8", "SD HERMINIO 126227-0", "CB PAULO 113537-6",
   "CB EDEIWES 116024-9", "SD J.Magagalhães 125632-7", "CB GEORGE 120456-4"
+];
+
+const SERVICE_TYPES = [
+  'ORDINÁRIO', 'EXTRA (PJES)', 'OPERAÇÃO IMPACTO', 'OPERAÇÃO BARREIRA', 'OPERAÇÃO CONVÍVIO', 'OUTROS'
 ];
 
 const OPERATIONAL_PREFIXES = [
@@ -358,7 +363,8 @@ export default function App() {
             time: format(new Date(), 'HH:mm')
           },
           drivers: {
-            driverName: 'SISTEMA / MANUTENÇÃO'
+            driverName: 'SISTEMA / MANUTENÇÃO',
+            serviceType: 'MANUTENÇÃO'
           },
           mileage: {
             currentMileage: vehicle.lastMileage,
@@ -406,7 +412,8 @@ export default function App() {
         time: format(new Date(), 'HH:mm')
       },
       drivers: {
-        driverName: lastCheckIn?.drivers.driverName || ''
+        driverName: lastCheckIn?.drivers.driverName || '',
+        serviceType: lastCheckIn?.drivers.serviceType || ''
       },
       mileage: {
         currentMileage: vehicle.lastMileage,
@@ -457,6 +464,7 @@ export default function App() {
           `📟 *Pref:* ${formData.identification.operationalPrefix || '---'}%0A` +
           `🧮 *Emp:* ${formData.identification.operationalPrefix ? formData.identification.operationalPrefix.split(' ')[0] : '---'}%0A` +
           `🚓 *VT:* ${formData.identification.model}%0A` +
+          `🛠️ *Serv:* ${formData.drivers.serviceType || '---'}%0A` +
           `🔓 *Km de inic:* ${formData.mileage.currentMileage}%0A` +
           `⏳ *Hora Armou:* ${formData.identification.time}%0A` +
           `👮🏼‍♂️ *Con/Mat:* ${driverFormatted}`;
@@ -465,6 +473,7 @@ export default function App() {
           `⚠️ *Placa:* ${formData.identification.plate}%0A` +
           `📟 *Pref:* ${formData.identification.operationalPrefix || '---'}%0A` +
           `🚓 *VT:* ${formData.identification.model}%0A` +
+          `🛠️ *Serv:* ${formData.drivers.serviceType || '---'}%0A` +
           `🔒 *Km de devol:* ${formData.mileage.currentMileage}%0A` +
           `⏳ *Hora Desarmou:* ${formData.identification.time}%0A` +
           `👮🏼‍♂️ *Con/Mat:* ${driverFormatted}`;
@@ -924,9 +933,15 @@ export default function App() {
                                   </div>
                                 </div>
 
-                                <div className="space-y-1">
-                                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Registrado por</p>
-                                  <p className="text-xs font-bold text-slate-700">{record.userName || 'N/A'} ({record.userEmail})</p>
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-1">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Registrado por</p>
+                                    <p className="text-xs font-bold text-slate-700">{record.userName || 'N/A'} ({record.userEmail})</p>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Tipo de Serviço</p>
+                                    <p className="text-xs font-bold text-slate-700">{record.drivers.serviceType || 'N/A'}</p>
+                                  </div>
                                 </div>
 
                                 {record.mileage.notes && (
@@ -1111,6 +1126,17 @@ export default function App() {
                         <datalist id="drivers-list">
                           {DRIVERS_LIST.map(d => <option key={d} value={d} />)}
                         </datalist>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Tipo de Serviço</label>
+                        <select 
+                          value={formData.drivers.serviceType}
+                          onChange={(e) => setFormData({...formData, drivers: {...formData.drivers, serviceType: e.target.value}})}
+                          className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-pmpe-blue outline-none transition-all font-bold appearance-none"
+                        >
+                          <option value="">Selecione o serviço...</option>
+                          {SERVICE_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
                       </div>
                     </motion.div>
                   )}
