@@ -459,24 +459,27 @@ export default function App() {
       const driverFormatted = formData.drivers.driverName.replace(/ (\d)/, ' / $1');
       
       if (operationType === 'check-in') {
-        message = `🪙 *Pat:* ${formData.identification.prefix}%0A` +
-          `⚠️ *Placa:* ${formData.identification.plate}%0A` +
-          `📟 *Pref:* ${formData.identification.operationalPrefix || '---'}%0A` +
-          `🧮 *Emp:* ${formData.identification.operationalPrefix ? formData.identification.operationalPrefix.split(' ')[0] : '---'}%0A` +
-          `🚓 *VT:* ${formData.identification.model}%0A` +
-          `🛠️ *Serv:* ${formData.drivers.serviceType || '---'}%0A` +
-          `🔓 *Km de inic:* ${formData.mileage.currentMileage}%0A` +
-          `⏳ *Hora Armou:* ${formData.identification.time}%0A` +
-          `👮🏼‍♂️ *Con/Mat:* ${driverFormatted}`;
+        message = `✅ *CHECK-IN VIATURA*%0A` +
+          `🪙 *Pat:* ${formData.identification.prefix}%0A` +
+          `⛔ *Placa:* ${formData.identification.plate}%0A` +
+          `📟 *Prefixo:* ${formData.identification.operationalPrefix || '---'}%0A` +
+          `🧮 *Emprego:* ${formData.drivers.serviceType || '---'}%0A` +
+          `🚓 *Vtr:* ${formData.identification.model}%0A` +
+          `🔓 *Km inic:* ${formData.mileage.currentMileage}%0A` +
+          `📅 *Data:* ${formData.identification.date.split('-').reverse().join('/')}%0A` +
+          `⌚ *Hora que armou:* ${formData.identification.time}%0A` +
+          `👮🏻‍♂️ *Condutor/Mat:* ${driverFormatted}`;
       } else {
-        message = `🪙 *Pat:* ${formData.identification.prefix}%0A` +
-          `⚠️ *Placa:* ${formData.identification.plate}%0A` +
-          `📟 *Pref:* ${formData.identification.operationalPrefix || '---'}%0A` +
-          `🚓 *VT:* ${formData.identification.model}%0A` +
-          `🛠️ *Serv:* ${formData.drivers.serviceType || '---'}%0A` +
-          `🔒 *Km de devol:* ${formData.mileage.currentMileage}%0A` +
-          `⏳ *Hora Desarmou:* ${formData.identification.time}%0A` +
-          `👮🏼‍♂️ *Con/Mat:* ${driverFormatted}`;
+        message = `🏁 *CHECK-OUT VIATURA*%0A` +
+          `🪙 *Pat:* ${formData.identification.prefix}%0A` +
+          `⛔ *Placa:* ${formData.identification.plate}%0A` +
+          `📟 *Prefixo:* ${formData.identification.operationalPrefix || '---'}%0A` +
+          `🧮 *Emprego:* ${formData.drivers.serviceType || '---'}%0A` +
+          `🚓 *Vtr:* ${formData.identification.model}%0A` +
+          `🔐 *Km final:* ${formData.mileage.currentMileage}%0A` +
+          `📅 *Data:* ${formData.identification.date.split('-').reverse().join('/')}%0A` +
+          `⌚ *Hora que desarmou:* ${formData.identification.time}%0A` +
+          `👮🏻‍♂️ *Condutor/Mat:* ${driverFormatted}`;
       }
 
       if (formData.mileage.notes) {
