@@ -65,6 +65,7 @@ interface RecordEntry {
   type: 'check-out' | 'check-in';
   timestamp: any;
   userEmail: string;
+  userName?: string;
   identification: {
     prefix: string;
     operationalPrefix: string;
@@ -342,6 +343,7 @@ export default function App() {
           type: newStatus === 'maintenance' ? 'maintenance-in' : 'maintenance-out',
           timestamp: serverTimestamp(),
           userEmail: user.email,
+          userName: user.displayName || user.email.split('@')[0],
           identification: {
             plate: vehicle.plate,
             prefix: vehicle.prefix || 'RESERVA',
@@ -426,6 +428,7 @@ export default function App() {
         type: operationType,
         timestamp: serverTimestamp(),
         userEmail: user.email,
+        userName: user.displayName || user.email.split('@')[0],
         identification: formData.identification,
         drivers: formData.drivers,
         mileage: formData.mileage
@@ -865,7 +868,7 @@ export default function App() {
                             <div className="grid grid-cols-1 gap-1 text-[10px] text-slate-500">
                               <span className="flex items-center gap-1 font-medium text-pmpe-blue truncate">
                                 <Shield className="w-3 h-3" />
-                                Operador: {record.userEmail}
+                                Operador: {record.userName || record.userEmail}
                               </span>
                               <div className="grid grid-cols-2 gap-2">
                                 <span className="flex items-center gap-1">
@@ -903,7 +906,7 @@ export default function App() {
 
                                 <div className="space-y-1">
                                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Registrado por</p>
-                                  <p className="text-xs font-bold text-slate-700">{record.userEmail}</p>
+                                  <p className="text-xs font-bold text-slate-700">{record.userName || 'N/A'} ({record.userEmail})</p>
                                 </div>
 
                                 {record.mileage.notes && (
