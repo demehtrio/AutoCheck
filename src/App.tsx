@@ -144,7 +144,7 @@ const DRIVERS_LIST = [
 ];
 
 const SERVICE_TYPES = [
-  'ORDINÁRIO', 'EXTRA (PJES)', 'OPERAÇÃO IMPACTO', 'OPERAÇÃO BARREIRA', 'OPERAÇÃO CONVÍVIO', 'OUTROS'
+  'Ordinário', 'PJES', 'PE Seguro', 'FECHA BATALHÃO', 'OUTROS'
 ];
 
 const OPERATIONAL_PREFIXES = [
