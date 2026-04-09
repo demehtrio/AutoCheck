@@ -155,43 +155,42 @@ const SERVICE_TYPES = [
 ];
 
 const OPERATIONAL_PREFIXES = [
+  "GT 14000- OPERAÇÕES",
+  "GT 14111- CENTRO",
+  "GT 14112- CALUMBI",
+  "GT 14113 - QSH",
+  "GT 14114- ESCOLTA",
+  "GT 14115 - FECHA BATALHÃO",
+  "GT 14116- VANETE ALMEIDA",
+  "GT 14117- EVENTO",
+  "GT 14118- EVENTO",
+  "GT 14121- BETANIA",
+  "GT 14211-BELMONTE",
+  "GT 14311- TRIUNFO",
+  "GT 14321-SANTA CRUZ",
+  "GT 14331- FLORES",
+  "GE 14102 - RURAL",
+  "GE 14101- GATI ORDINÁRIO",
+  "GE 14150 - GATI EXTRA",
+  "GE 14250 - RURAL EXTRA",
+  "GV 14050- MALHAS DA LEI",
+  "MP 14050- MARIA DA PENHA",
+  "VE 14111-ESCOLAR",
+  "VE 14112-ESCOLAR",
+  "VE 14113-ESCOLAR",
   "GT 14100 - COMANDO",
   "GT 14200 - SUBCOMANDO",
-  "GT 14000- OPERAÇÕES",
-  "GT 14111",
-  "GT 14112",
-  "GT 14113",
-  "GT 14114",
-  "GT 14115",
-  "GT 14116",
-  "GT 14117",
-  "GT 14118",
-  "GT 14121",
-  "GT 14211",
-  "GT 14311",
-  "GT 14321",
-  "GT 14331",
-  "GTR 14050",
-  "GG 14050",
-  "GG 14150",
-  "GG 14250",
-  "GG 14350",
-  "GV 14050",
-  "MP 14050",
-  "VE 14111",
-  "VE 14112",
-  "VE 14113",
-  "GT 14115 FECHA BATALHÃO",
-  "GT ESCOLTA",
-  "MO 14111",
   "GT DISPERSÃO",
   "OPERAÇÃO BICENTENÁRIO - 06H AS 14H",
-  "GTR 14150",
   "OPERAÇÃO ENEM",
-  "GE 14101",
-  "GE 14102",
-  "GE EXTRA - 14150",
-  "GE EXTRA - 14250"
+  "GEM 14101- ROCAM",
+  "GEM 14102- ROCAM",
+  "GEM 14113- ROCAM",
+  "GEM 14114- ROCAM EXTRA",
+  "GEM 14115- ROCAM EXTRA",
+  "GEM 14116- ROCAM EXTRA",
+  "GEM 14211- ROCAM BELMONTE",
+  "GEM 14212- ROCAM BELMONTE"
 ];
 
 export default function App() {
@@ -881,7 +880,7 @@ export default function App() {
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                   <input 
                     type="text"
-                    placeholder="Buscar por placa, prefixo ou modelo..."
+                    placeholder="Buscar por placa, patrimônio ou modelo..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-12 pr-4 py-3 bg-white border-2 border-slate-200 rounded-2xl focus:border-pmpe-blue outline-none transition-all shadow-sm font-medium"
