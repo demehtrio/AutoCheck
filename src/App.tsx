@@ -87,7 +87,7 @@ interface RecordEntry {
     serviceType: string;
   };
   mileage: {
-    currentMileage: number;
+    currentMileage: number | '';
     notes: string;
   };
 }
@@ -220,7 +220,7 @@ export default function App() {
       commanderName: ''
     },
     mileage: {
-      currentMileage: 0,
+      currentMileage: '',
       notes: ''
     }
   });
@@ -527,8 +527,8 @@ export default function App() {
             serviceType: 'MANUTENÇÃO'
           },
           mileage: {
-            currentMileage: vehicle.lastMileage,
-            notes: newStatus === 'maintenance' ? 'Viatura baixada para manutenção.' : 'Viatura liberada da manutenção.'
+            ...formData.mileage,
+            currentMileage: ''
           }
         });
       }
@@ -576,7 +576,7 @@ export default function App() {
         serviceType: lastCheckIn?.drivers.serviceType || ''
       },
       mileage: {
-        currentMileage: vehicle.lastMileage,
+        currentMileage: '',
         notes: ''
       }
     });
@@ -1553,18 +1553,19 @@ export default function App() {
                           <Gauge className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                           <input 
                             type="number"
-                            value={isNaN(formData.mileage.currentMileage) ? '' : formData.mileage.currentMileage}
+                            value={formData.mileage.currentMileage}
                             onChange={(e) => {
-                              const val = parseInt(e.target.value);
+                              const val = e.target.value === '' ? '' : parseInt(e.target.value);
                               setFormData({
                                 ...formData, 
                                 mileage: {
                                   ...formData.mileage, 
-                                  currentMileage: isNaN(val) ? 0 : val
+                                  currentMileage: val
                                 }
                               });
                             }}
                             className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-pmpe-blue outline-none transition-all text-2xl font-mono font-bold"
+                            placeholder="0"
                           />
                         </div>
                         <p className="mt-2 text-[10px] text-slate-400">
