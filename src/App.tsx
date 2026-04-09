@@ -198,6 +198,7 @@ export default function App() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const isAdmin = user?.email === 'demetriomarques@gmail.com' || userRole === 'admin';
   const [loading, setLoading] = useState(true);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [history, setHistory] = useState<RecordEntry[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
@@ -250,14 +251,23 @@ export default function App() {
 
   // Auth listener
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      setLoadingTimeout(true);
+      setLoading(false);
+    }, 8000); // 8 second safety timeout
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      clearTimeout(timeout);
       setUser(currentUser);
       if (!currentUser) {
         setUserRole(null);
         setLoading(false);
       }
     });
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   // Role listener
@@ -318,7 +328,11 @@ export default function App() {
   useEffect(() => {
     if (!user || view !== 'history') return;
 
-    const q = query(collection(db, 'checklists'), orderBy('timestamp', 'desc'));
+    const q = query(
+      collection(db, 'checklists'), 
+      orderBy('timestamp', 'desc'),
+      limit(50)
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const recordList: RecordEntry[] = [];
       snapshot.forEach((doc) => {
@@ -669,8 +683,23 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pmpe-blue"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pmpe-blue mb-4"></div>
+        {loadingTimeout && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center"
+          >
+            <p className="text-slate-500 text-sm mb-4">O carregamento está demorando mais que o esperado...</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="text-pmpe-blue font-bold text-sm underline"
+            >
+              Tentar Recarregar
+            </button>
+          </motion.div>
+        )}
       </div>
     );
   }
@@ -894,7 +923,7 @@ export default function App() {
                       (v.prefix?.toLowerCase() || "reserva").includes(searchTerm.toLowerCase()) ||
                       (v.model?.toLowerCase() || "").includes(searchTerm.toLowerCase())
                     )
-                  );
+                  ).slice(0, 30); // Limit visible items for better mobile performance
 
                   if (filtered.length === 0) {
                     return (
@@ -1489,8 +1518,17 @@ export default function App() {
                           <Gauge className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
                           <input 
                             type="number"
-                            value={formData.mileage.currentMileage}
-                            onChange={(e) => setFormData({...formData, mileage: {...formData.mileage, currentMileage: parseInt(e.target.value)}})}
+                            value={isNaN(formData.mileage.currentMileage) ? '' : formData.mileage.currentMileage}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setFormData({
+                                ...formData, 
+                                mileage: {
+                                  ...formData.mileage, 
+                                  currentMileage: isNaN(val) ? 0 : val
+                                }
+                              });
+                            }}
                             className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-pmpe-blue outline-none transition-all text-2xl font-mono font-bold"
                           />
                         </div>
@@ -1622,8 +1660,14 @@ export default function App() {
                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">KM Atual</label>
                     <input 
                       type="number"
-                      value={vehicleForm.lastMileage}
-                      onChange={(e) => setVehicleForm({...vehicleForm, lastMileage: parseInt(e.target.value) || 0})}
+                      value={isNaN(vehicleForm.lastMileage) ? '' : vehicleForm.lastMileage}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setVehicleForm({
+                          ...vehicleForm, 
+                          lastMileage: isNaN(val) ? 0 : val
+                        });
+                      }}
                       className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-pmpe-blue outline-none font-bold"
                     />
                   </div>
