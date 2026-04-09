@@ -923,7 +923,7 @@ export default function App() {
                       (v.prefix?.toLowerCase() || "reserva").includes(searchTerm.toLowerCase()) ||
                       (v.model?.toLowerCase() || "").includes(searchTerm.toLowerCase())
                     )
-                  ).slice(0, 30); // Limit visible items for better mobile performance
+                  ).slice(0, 10); // Limit visible items for better mobile performance
 
                   if (filtered.length === 0) {
                     return (
