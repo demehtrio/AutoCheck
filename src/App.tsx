@@ -231,6 +231,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'history' | 'admin'>('list');
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'in_use' | 'maintenance'>('all');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'check-out' | 'check-in' | 'maintenance'>('all');
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
@@ -835,21 +836,34 @@ export default function App() {
 
       {/* Stats Bar */}
       <div className="bg-white border-b border-slate-200 shadow-sm sticky top-[76px] z-40">
-        <div className="max-w-4xl mx-auto px-4 py-2 flex justify-around items-center text-center">
-          <div className="flex flex-col">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Disponíveis</span>
+        <div className="max-w-4xl mx-auto px-2 py-2 flex justify-around items-center text-center gap-1">
+          <button 
+            onClick={() => setStatusFilter(statusFilter === 'available' ? 'all' : 'available')}
+            className={`flex-1 flex flex-col items-center p-2 rounded-xl transition-all ${statusFilter === 'available' ? 'bg-green-50 ring-2 ring-green-500/20' : 'hover:bg-slate-50'}`}
+          >
+            <span className={`text-[9px] font-bold uppercase tracking-widest ${statusFilter === 'available' ? 'text-green-700' : 'text-slate-400'}`}>Disponíveis</span>
             <span className="text-lg font-black text-green-600">{stats.available}</span>
-          </div>
-          <div className="w-px h-6 bg-slate-100"></div>
-          <div className="flex flex-col">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Em Uso</span>
+          </button>
+          
+          <div className="w-px h-8 bg-slate-100"></div>
+          
+          <button 
+            onClick={() => setStatusFilter(statusFilter === 'in_use' ? 'all' : 'in_use')}
+            className={`flex-1 flex flex-col items-center p-2 rounded-xl transition-all ${statusFilter === 'in_use' ? 'bg-blue-50 ring-2 ring-pmpe-blue/20' : 'hover:bg-slate-50'}`}
+          >
+            <span className={`text-[9px] font-bold uppercase tracking-widest ${statusFilter === 'in_use' ? 'text-pmpe-blue' : 'text-slate-400'}`}>Em Uso</span>
             <span className="text-lg font-black text-pmpe-blue">{stats.inUse}</span>
-          </div>
-          <div className="w-px h-6 bg-slate-100"></div>
-          <div className="flex flex-col">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Baixadas</span>
+          </button>
+          
+          <div className="w-px h-8 bg-slate-100"></div>
+          
+          <button 
+            onClick={() => setStatusFilter(statusFilter === 'maintenance' ? 'all' : 'maintenance')}
+            className={`flex-1 flex flex-col items-center p-2 rounded-xl transition-all ${statusFilter === 'maintenance' ? 'bg-red-50 ring-2 ring-pmpe-red/20' : 'hover:bg-slate-50'}`}
+          >
+            <span className={`text-[9px] font-bold uppercase tracking-widest ${statusFilter === 'maintenance' ? 'text-pmpe-red' : 'text-slate-400'}`}>Baixadas</span>
             <span className="text-lg font-black text-pmpe-red">{stats.maintenance}</span>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -917,19 +931,29 @@ export default function App() {
                 </div>
 
                 {(() => {
-                  const filtered = vehicles.filter(v => 
-                    (v.status === 'available' || v.status === 'in_use' || v.status === 'maintenance') && (
+                  const filtered = vehicles.filter(v => {
+                    const matchesStatus = statusFilter === 'all' || v.status === statusFilter;
+                    const matchesSearch = (
                       (v.plate?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
                       (v.prefix?.toLowerCase() || "reserva").includes(searchTerm.toLowerCase()) ||
                       (v.model?.toLowerCase() || "").includes(searchTerm.toLowerCase())
-                    )
-                  ).slice(0, 10); // Limit visible items for better mobile performance
+                    );
+                    return matchesStatus && matchesSearch;
+                  }).slice(0, 10); // Limit visible items for better mobile performance
 
                   if (filtered.length === 0) {
                     return (
                       <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200">
                         <Search className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                        <p>Nenhuma viatura encontrada para "{searchTerm}"</p>
+                        <p>Nenhuma viatura encontrada {statusFilter !== 'all' ? `com status "${statusFilter === 'available' ? 'Disponível' : statusFilter === 'in_use' ? 'Em Uso' : 'Baixada'}"` : ''} para "{searchTerm}"</p>
+                        {statusFilter !== 'all' && (
+                          <button 
+                            onClick={() => setStatusFilter('all')}
+                            className="mt-4 text-pmpe-blue font-bold text-sm underline"
+                          >
+                            Limpar Filtro de Status
+                          </button>
+                        )}
                       </div>
                     );
                   }
