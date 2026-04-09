@@ -794,6 +794,7 @@ export default function App() {
   ];
 
   const stats = {
+    total: vehicles.length,
     available: vehicles.filter(v => v.status === 'available').length,
     inUse: vehicles.filter(v => v.status === 'in_use').length,
     maintenance: vehicles.filter(v => v.status === 'maintenance').length
@@ -863,6 +864,16 @@ export default function App() {
           >
             <span className={`text-[9px] font-bold uppercase tracking-widest ${statusFilter === 'maintenance' ? 'text-pmpe-red' : 'text-slate-400'}`}>Baixadas</span>
             <span className="text-lg font-black text-pmpe-red">{stats.maintenance}</span>
+          </button>
+
+          <div className="w-px h-8 bg-slate-100"></div>
+
+          <button 
+            onClick={() => setStatusFilter('all')}
+            className={`flex-1 flex flex-col items-center p-2 rounded-xl transition-all ${statusFilter === 'all' ? 'bg-slate-100 ring-2 ring-slate-200' : 'hover:bg-slate-50'}`}
+          >
+            <span className={`text-[9px] font-bold uppercase tracking-widest ${statusFilter === 'all' ? 'text-slate-900' : 'text-slate-400'}`}>Todas</span>
+            <span className="text-lg font-black text-slate-700">{stats.total}</span>
           </button>
         </div>
       </div>
@@ -939,7 +950,7 @@ export default function App() {
                       (v.model?.toLowerCase() || "").includes(searchTerm.toLowerCase())
                     );
                     return matchesStatus && matchesSearch;
-                  }).slice(0, 10); // Limit visible items for better mobile performance
+                  });
 
                   if (filtered.length === 0) {
                     return (
