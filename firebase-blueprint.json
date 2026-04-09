@@ -51,6 +51,17 @@
         }
       },
       "required": ["vehicleId", "type", "timestamp", "userEmail"]
+    },
+    "userProfile": {
+      "title": "User Profile",
+      "description": "User profile and role information",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "displayName": { "type": "string" }
+      },
+      "required": ["email", "role"]
     }
   },
   "firestore": {
@@ -61,6 +72,10 @@
     "/checklists/{checklistId}": {
       "schema": "checklistEntry",
       "description": "Collection of vehicle checklists"
+    },
+    "/users/{userId}": {
+      "schema": "userProfile",
+      "description": "Collection of user profiles and roles"
     }
   }
 }

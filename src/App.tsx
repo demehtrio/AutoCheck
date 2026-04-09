@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   collection, 
   onSnapshot, 
@@ -16,11 +16,13 @@ import {
   where,
   limit,
   setDoc,
-  getDocs
+  getDocs,
+  deleteDoc
 } from 'firebase/firestore';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { 
   Car, 
+  Bike,
   CheckCircle2, 
   LogOut, 
   LogIn, 
@@ -41,7 +43,11 @@ import {
   ChevronUp,
   Save,
   Search,
-  Share2
+  Share2,
+  Settings,
+  Plus,
+  Trash2,
+  Edit
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format } from 'date-fns';
@@ -190,7 +196,8 @@ const OPERATIONAL_PREFIXES = [
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const isAdmin = user?.email === 'demetriomarques@gmail.com';
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const isAdmin = user?.email === 'demetriomarques@gmail.com' || userRole === 'admin';
   const [loading, setLoading] = useState(true);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [history, setHistory] = useState<RecordEntry[]>([]);
@@ -222,19 +229,67 @@ export default function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<'list' | 'history'>('list');
+  const [view, setView] = useState<'list' | 'history' | 'admin'>('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'check-out' | 'check-in' | 'maintenance'>('all');
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+  const [vehicleForm, setVehicleForm] = useState({
+    prefix: '',
+    plate: '',
+    model: '',
+    status: 'available' as 'available' | 'in_use' | 'maintenance',
+    lastMileage: 0
+  });
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string, type: 'vehicle' | 'admin', label?: string } | null>(null);
+  const isBootstrapping = useRef(false);
 
   // Auth listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      setLoading(false);
+      if (!currentUser) {
+        setUserRole(null);
+        setLoading(false);
+      }
     });
     return () => unsubscribe();
   }, []);
+
+  // Role listener
+  useEffect(() => {
+    if (!user) return;
+
+    const userDocRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setUserRole(docSnap.data().role);
+      } else {
+        // Bootstrap default admin if it's the specific email
+        if (user.email === 'demetriomarques@gmail.com') {
+          setDoc(userDocRef, {
+            email: user.email,
+            role: 'admin',
+            displayName: user.displayName || 'Admin'
+          });
+          setUserRole('admin');
+        } else {
+          setUserRole('user');
+        }
+      }
+      setLoading(false);
+    }, (err) => {
+      console.error("Error fetching user role:", err);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
 
   // Vehicles listener
   useEffect(() => {
@@ -246,11 +301,11 @@ export default function App() {
         vehicleList.push({ id: doc.id, ...doc.data() } as Vehicle);
       });
       
-      // Bootstrap if empty or only has old sample data
-      if (vehicleList.length < 10) {
+      setVehicles(vehicleList);
+      
+      // Bootstrap if empty - only if admin to have permissions
+      if (snapshot.empty && isAdmin) {
         bootstrapVehicles();
-      } else {
-        setVehicles(vehicleList);
       }
     }, (err) => {
       console.error("Error fetching vehicles:", err);
@@ -258,7 +313,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, isAdmin]);
 
   // History listener
   useEffect(() => {
@@ -280,7 +335,88 @@ export default function App() {
     return () => unsubscribe();
   }, [user, view]);
 
-  const bootstrapVehicles = async () => {
+  // Admin users listener
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const unsubscribe = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const userList: any[] = [];
+      snapshot.forEach((doc) => {
+        userList.push({ id: doc.id, ...doc.data() });
+      });
+      setAdminUsers(userList);
+    });
+    return () => unsubscribe();
+  }, [isAdmin]);
+
+  const handleSaveVehicle = async () => {
+    if (!isAdmin) return;
+    try {
+      if (editingVehicle) {
+        await updateDoc(doc(db, 'vehicles', editingVehicle.id), vehicleForm);
+      } else {
+        await addDoc(collection(db, 'vehicles'), vehicleForm);
+      }
+      setIsVehicleModalOpen(false);
+      setEditingVehicle(null);
+      setVehicleForm({ prefix: '', plate: '', model: '', status: 'available', lastMileage: 0 });
+    } catch (err) {
+      console.error("Error saving vehicle:", err);
+      setError("Erro ao salvar viatura.");
+    }
+  };
+
+  const handleDeleteVehicle = (id: string, plate: string) => {
+    if (!isAdmin) return;
+    setDeleteConfirm({ id, type: 'vehicle', label: plate });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+    try {
+      if (deleteConfirm.type === 'vehicle') {
+        await deleteDoc(doc(db, 'vehicles', deleteConfirm.id));
+      } else {
+        await updateDoc(doc(db, 'users', deleteConfirm.id), { role: 'user' });
+      }
+      setDeleteConfirm(null);
+    } catch (err) {
+      console.error("Error during deletion:", err);
+      setError("Erro ao realizar a exclusão.");
+    }
+  };
+
+  const handleAddAdmin = async () => {
+    if (!isAdmin || !newUserEmail) return;
+    try {
+      const q = query(collection(db, 'users'), where('email', '==', newUserEmail));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const userDoc = snap.docs[0];
+        await updateDoc(doc(db, 'users', userDoc.id), { role: 'admin' });
+      } else {
+        setError("Usuário não encontrado. Ele precisa ter feito login pelo menos uma vez.");
+      }
+      setNewUserEmail('');
+    } catch (err) {
+      console.error("Error adding admin:", err);
+    }
+  };
+
+  const handleRemoveAdmin = (userId: string, email: string) => {
+    if (!isAdmin) return;
+    if (email === 'demetriomarques@gmail.com') {
+      setError("Não é possível remover o administrador principal.");
+      return;
+    }
+    setDeleteConfirm({ id: userId, type: 'admin', label: email });
+  };
+
+  const bootstrapVehicles = async (force = false) => {
+    if (!force && (isBootstrapping.current || vehicles.length > 0)) return;
+    isBootstrapping.current = true;
+    if (force) setIsSyncing(true);
+    
     const initialVehicles = [
       { plate: 'SNZ8F51', model: 'CHEVROLET/S-10', prefix: '640150', status: 'available', lastMileage: 0 },
       { plate: 'SNZ4C21', model: 'CHEVROLET/S-10', prefix: '640151', status: 'available', lastMileage: 0 },
@@ -289,21 +425,21 @@ export default function App() {
       { plate: 'SOG4I59', model: 'CHEVROLET/S-10', prefix: '640154', status: 'available', lastMileage: 0 },
       { plate: 'SOG4G99', model: 'CHEVROLET/S-10', prefix: '640155', status: 'available', lastMileage: 0 },
       { plate: 'SOH6A98', model: 'CHEVROLET/S-10', prefix: '640156', status: 'available', lastMileage: 0 },
-      { plate: 'UHL2H45', model: 'HILUX', prefix: '640161', status: 'available', lastMileage: 0 },
-      { plate: 'RZZ8G50', model: 'RENAULT/DUSTER', prefix: '640135', status: 'available', lastMileage: 0 },
-      { plate: 'RZZ6G90', model: 'RENAULT/DUSTER', prefix: '640136', status: 'available', lastMileage: 0 },
-      { plate: 'RZZ0F43', model: 'RENAULT/DUSTER', prefix: '640137', status: 'available', lastMileage: 0 },
-      { plate: 'RZZ0F83', model: 'RENAULT/DUSTER', prefix: '640138', status: 'available', lastMileage: 0 },
-      { plate: 'RZZ0G33', model: 'RENAULT/DUSTER', prefix: '640139', status: 'available', lastMileage: 0 },
-      { plate: 'RZZ6E00', model: 'RENAULT/DUSTER', prefix: '640140', status: 'available', lastMileage: 0 },
-      { plate: 'RZZ8H00', model: 'RENAULT/DUSTER', prefix: '640141', status: 'available', lastMileage: 0 },
-      { plate: 'RZY4G58', model: 'RENAULT/DUSTER', prefix: '640142', status: 'available', lastMileage: 0 },
-      { plate: 'RZZ2E03', model: 'RENAULT/DUSTER', prefix: '640143', status: 'available', lastMileage: 0 },
-      { plate: 'RZY1G98', model: 'RENAULT/DUSTER', prefix: '640157', status: 'available', lastMileage: 0 },
-      { plate: 'SNN5E90', model: 'RENAULT/DUSTER', prefix: '1210097', status: 'available', lastMileage: 0 },
+      { plate: 'UHL2H45', model: 'HILLUX', prefix: '640161', status: 'available', lastMileage: 0 },
+      { plate: 'RZZ8G50', model: 'RENALT/DUSTER', prefix: '640135', status: 'available', lastMileage: 0 },
+      { plate: 'RZZ6G90', model: 'RENALT/DUSTER', prefix: '640136', status: 'available', lastMileage: 0 },
+      { plate: 'RZZ0F43', model: 'RENALT/DUSTER', prefix: '640137', status: 'available', lastMileage: 0 },
+      { plate: 'RZZ0F83', model: 'RENALT/DUSTER', prefix: '640138', status: 'available', lastMileage: 0 },
+      { plate: 'RZZ0G33', model: 'RENALT/DUSTER', prefix: '640139', status: 'available', lastMileage: 0 },
+      { plate: 'RZZ6E00', model: 'RENALT/DUSTER', prefix: '640140', status: 'available', lastMileage: 0 },
+      { plate: 'RZZ8H00', model: 'RENALT/DUSTER', prefix: '640141', status: 'available', lastMileage: 0 },
+      { plate: 'RZY4G58', model: 'RENALT/DUSTER', prefix: '640142', status: 'available', lastMileage: 0 },
+      { plate: 'RZZ2E03', model: 'RENALT/DUSTER', prefix: '640143', status: 'available', lastMileage: 0 },
+      { plate: 'RZY1G98', model: 'RENALT/DUSTER', prefix: '640157', status: 'available', lastMileage: 0 },
+      { plate: 'SNN5E90', model: 'RENALT/DUSTER', prefix: '1210097', status: 'available', lastMileage: 0 },
       { plate: 'PBG5G37', model: 'FORD/RANGER', prefix: '64110', status: 'available', lastMileage: 0 },
       { plate: 'QYV7F75', model: 'MMC/L200', prefix: '64107', status: 'available', lastMileage: 0 },
-      { plate: 'SNO0C99', model: 'VOLKSWAGEN/POLO', prefix: '640144', status: 'available', lastMileage: 0 },
+      { plate: 'SNO0C99', model: 'VOLKSWAGENPOLO', prefix: '640144', status: 'available', lastMileage: 0 },
       { plate: 'SOB5F10', model: 'FIAT/ARGO', prefix: '1210105', status: 'available', lastMileage: 0 },
       { plate: 'SOA9C08', model: 'FIAT/ARGO', prefix: '1210153', status: 'available', lastMileage: 0 },
       { plate: 'PFA5246', model: 'VOLKSWAGEN/VOLARE', prefix: '6489', status: 'available', lastMileage: 0 },
@@ -327,6 +463,8 @@ export default function App() {
       { plate: 'SNT5I45', model: 'HONDA/XRE300', prefix: '640148', status: 'available', lastMileage: 0 },
       { plate: 'SNT5I46', model: 'HONDA/XRE300', prefix: '640149', status: 'available', lastMileage: 0 },
       { plate: 'SOJ6C78', model: 'HONDA/XRE300', prefix: '640158', status: 'available', lastMileage: 0 },
+      { plate: 'SOJ6D28', model: 'HONDA/XRE300', prefix: '640159', status: 'available', lastMileage: 0 },
+      { plate: 'SOJ6D78', model: 'HONDA/XRE300', prefix: '640160', status: 'available', lastMileage: 0 },
     ];
 
     try {
@@ -337,6 +475,13 @@ export default function App() {
       }
     } catch (err) {
       console.error("Error bootstrapping:", err);
+      if (force) setError("Erro ao sincronizar frota.");
+    } finally {
+      isBootstrapping.current = false;
+      if (force) {
+        setIsSyncing(false);
+        alert("Frota sincronizada com sucesso!");
+      }
     }
   };
 
@@ -698,6 +843,15 @@ export default function App() {
               <History className="w-4 h-4" />
               Histórico
             </button>
+            {isAdmin && (
+              <button 
+                onClick={() => setView('admin')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold transition-all ${view === 'admin' ? 'bg-pmpe-blue text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                <Settings className="w-4 h-4" />
+                Gerenciamento
+              </button>
+            )}
           </div>
         )}
 
@@ -764,7 +918,13 @@ export default function App() {
                             vehicle.status === 'maintenance' ? 'bg-amber-50 text-amber-600' :
                             'bg-red-50 text-pmpe-red'
                           }`}>
-                            {vehicle.status === 'maintenance' ? <AlertCircle className="w-6 h-6" /> : <Car className="w-6 h-6" />}
+                            {vehicle.status === 'maintenance' ? (
+                              <AlertCircle className="w-6 h-6" />
+                            ) : vehicle.model.toLowerCase().includes('xre') ? (
+                              <Bike className="w-6 h-6" />
+                            ) : (
+                              <Car className="w-6 h-6" />
+                            )}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
@@ -838,7 +998,7 @@ export default function App() {
                   ));
                 })()}
               </motion.div>
-            ) : (
+            ) : view === 'history' ? (
               <motion.div 
                 key="history"
                 initial={{ opacity: 0, x: 20 }}
@@ -1036,6 +1196,116 @@ export default function App() {
                     );
                   });
                 })()}
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="admin"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="space-y-6"
+              >
+                {/* Admin Header */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <h2 className="text-xl font-bold text-slate-900">Gerenciamento</h2>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button 
+                      onClick={() => bootstrapVehicles(true)}
+                      disabled={isSyncing}
+                      className="flex-1 sm:flex-none bg-white border-2 border-slate-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold shadow-sm hover:border-pmpe-blue transition-all flex items-center justify-center gap-2"
+                    >
+                      {isSyncing ? (
+                        <div className="w-4 h-4 border-2 border-pmpe-blue/30 border-t-pmpe-blue rounded-full animate-spin" />
+                      ) : (
+                        <ArrowLeftRight className="w-4 h-4" />
+                      )}
+                      Sincronizar Frota
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setEditingVehicle(null);
+                        setVehicleForm({ prefix: '', plate: '', model: '', status: 'available', lastMileage: 0 });
+                        setIsVehicleModalOpen(true);
+                      }}
+                      className="flex-1 sm:flex-none bg-pmpe-blue text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-pmpe-blue/20 flex items-center justify-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Nova Viatura
+                    </button>
+                  </div>
+                </div>
+
+                {/* Vehicles Management */}
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                  <div className="p-4 bg-slate-50 border-b border-slate-200">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Frota de Viaturas</h3>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {vehicles.map(v => (
+                      <div key={v.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                        <div>
+                          <p className="font-bold text-slate-900">{v.plate} <span className="text-[10px] text-slate-400 ml-2">{v.prefix}</span></p>
+                          <p className="text-xs text-slate-500">{v.model}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => {
+                              setEditingVehicle(v);
+                              setVehicleForm({
+                                prefix: v.prefix || '',
+                                plate: v.plate,
+                                model: v.model,
+                                status: v.status,
+                                lastMileage: v.lastMileage
+                              });
+                              setIsVehicleModalOpen(true);
+                            }}
+                            className="p-2 text-slate-400 hover:text-pmpe-blue hover:bg-blue-50 rounded-lg transition-all"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteVehicle(v.id, v.plate)}
+                            className="p-2 text-slate-400 hover:text-pmpe-red hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Admins Management */}
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                  <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Administradores</h3>
+                    <button 
+                      onClick={() => setIsUserModalOpen(true)}
+                      className="text-pmpe-blue text-xs font-bold hover:underline"
+                    >
+                      Adicionar Admin
+                    </button>
+                  </div>
+                  <div className="divide-y divide-slate-100">
+                    {adminUsers.filter(u => u.role === 'admin').map(u => (
+                      <div key={u.id} className="p-4 flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-slate-900">{u.displayName || 'Usuário'}</p>
+                          <p className="text-xs text-slate-500">{u.email}</p>
+                        </div>
+                        {u.email !== 'demetriomarques@gmail.com' && (
+                          <button 
+                            onClick={() => handleRemoveAdmin(u.id, u.email)}
+                            className="p-2 text-slate-400 hover:text-pmpe-red hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </motion.div>
             )
           ) : (
@@ -1302,6 +1572,183 @@ export default function App() {
           Polícia Militar de Pernambuco • 14º BPM
         </p>
       </footer>
+
+      {/* Vehicle Modal */}
+      <AnimatePresence>
+        {isVehicleModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 bg-pmpe-blue text-white">
+                <h3 className="text-xl font-bold">{editingVehicle ? 'Editar Viatura' : 'Nova Viatura'}</h3>
+                <p className="text-white/70 text-xs uppercase tracking-widest font-bold">Cadastro de Frota</p>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Prefixo</label>
+                  <input 
+                    type="text"
+                    value={vehicleForm.prefix}
+                    onChange={(e) => setVehicleForm({...vehicleForm, prefix: e.target.value})}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-pmpe-blue outline-none font-bold"
+                    placeholder="Ex: GT 14111"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Placa</label>
+                  <input 
+                    type="text"
+                    value={vehicleForm.plate}
+                    onChange={(e) => setVehicleForm({...vehicleForm, plate: e.target.value.toUpperCase()})}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-pmpe-blue outline-none font-bold"
+                    placeholder="Ex: PDS1795"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Modelo</label>
+                  <input 
+                    type="text"
+                    value={vehicleForm.model}
+                    onChange={(e) => setVehicleForm({...vehicleForm, model: e.target.value})}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-pmpe-blue outline-none font-bold"
+                    placeholder="Ex: FORD RANGER"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">KM Atual</label>
+                    <input 
+                      type="number"
+                      value={vehicleForm.lastMileage}
+                      onChange={(e) => setVehicleForm({...vehicleForm, lastMileage: parseInt(e.target.value) || 0})}
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-pmpe-blue outline-none font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</label>
+                    <select 
+                      value={vehicleForm.status}
+                      onChange={(e) => setVehicleForm({...vehicleForm, status: e.target.value as any})}
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-pmpe-blue outline-none font-bold appearance-none"
+                    >
+                      <option value="available">Disponível</option>
+                      <option value="in_use">Em Uso</option>
+                      <option value="maintenance">Baixada</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="p-6 bg-slate-50 flex gap-3">
+                <button 
+                  onClick={() => setIsVehicleModalOpen(false)}
+                  className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleSaveVehicle}
+                  className="flex-[2] bg-pmpe-blue text-white py-3 rounded-xl font-bold shadow-lg shadow-pmpe-blue/20 active:scale-95 transition-all"
+                >
+                  Salvar Viatura
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* User Modal */}
+      <AnimatePresence>
+        {isUserModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 bg-pmpe-blue text-white">
+                <h3 className="text-xl font-bold">Adicionar Administrador</h3>
+                <p className="text-white/70 text-xs uppercase tracking-widest font-bold">Controle de Acesso</p>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-xs text-slate-500">
+                  O usuário deve ter feito login no sistema pelo menos uma vez para ser promovido a administrador.
+                </p>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">E-mail do Usuário</label>
+                  <input 
+                    type="email"
+                    value={newUserEmail}
+                    onChange={(e) => setNewUserEmail(e.target.value)}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:border-pmpe-blue outline-none font-bold"
+                    placeholder="exemplo@gmail.com"
+                  />
+                </div>
+              </div>
+              <div className="p-6 bg-slate-50 flex gap-3">
+                <button 
+                  onClick={() => setIsUserModalOpen(false)}
+                  className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleAddAdmin}
+                  className="flex-[2] bg-pmpe-blue text-white py-3 rounded-xl font-bold shadow-lg shadow-pmpe-blue/20 active:scale-95 transition-all"
+                >
+                  Promover a Admin
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl"
+            >
+              <div className="p-6 text-center">
+                <div className="w-16 h-16 bg-red-50 text-pmpe-red rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Trash2 className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Confirmar Exclusão</h3>
+                <p className="text-slate-500 text-sm">
+                  Tem certeza que deseja excluir {deleteConfirm.type === 'vehicle' ? 'a viatura' : 'o administrador'} <span className="font-bold text-slate-900">{deleteConfirm.label}</span>?
+                </p>
+                {deleteConfirm.type === 'vehicle' && (
+                  <p className="mt-2 text-[10px] text-pmpe-red font-bold uppercase">Esta ação não pode ser desfeita.</p>
+                )}
+              </div>
+              <div className="p-6 bg-slate-50 flex gap-3">
+                <button 
+                  onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={confirmDelete}
+                  className="flex-1 bg-pmpe-red text-white py-3 rounded-xl font-bold shadow-lg shadow-pmpe-red/20 active:scale-95 transition-all"
+                >
+                  Excluir
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
