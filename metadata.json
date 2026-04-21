@@ -1,5 +1,5 @@
 {
-  "name": "VtrCheck Cadastro",
+  "name": "CadChecking",
   "description": "Controle de check-in e check-out de viaturas para o 14º BPM",
   "requestFramePermissions": []
 }

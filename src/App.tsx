@@ -70,7 +70,7 @@ interface Vehicle {
 interface RecordEntry {
   id: string;
   vehicleId: string;
-  type: 'check-out' | 'check-in';
+  type: 'checklist' | 'check-out' | 'check-in'; // keep old ones for compatibility
   timestamp: any;
   userEmail: string;
   userName?: string;
@@ -202,7 +202,7 @@ export default function App() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [history, setHistory] = useState<RecordEntry[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  const [operationType, setOperationType] = useState<'check-out' | 'check-in' | null>(null);
+  const [operationType, setOperationType] = useState<'checklist' | 'check-out' | 'check-in' | null>(null);
   
   // Form State
   const [currentTab, setCurrentTab] = useState<number>(0);
@@ -538,42 +538,39 @@ export default function App() {
     }
   };
 
-  const handleStartRecord = async (vehicle: Vehicle, type: 'check-out' | 'check-in') => {
-    let lastCheckIn: RecordEntry | null = null;
+  const handleStartRecord = async (vehicle: Vehicle, type: 'checklist' | 'check-out' | 'check-in' = 'checklist') => {
+    let lastRecord: RecordEntry | null = null;
     
-    if (type === 'check-out') {
-      try {
-        const q = query(
-          collection(db, 'checklists'), 
-          where('vehicleId', '==', vehicle.id),
-          where('type', '==', 'check-in'),
-          orderBy('timestamp', 'desc'),
-          limit(1)
-        );
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          lastCheckIn = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() } as RecordEntry;
-        }
-      } catch (err) {
-        console.error("Error fetching last check-in:", err);
+    try {
+      const q = query(
+        collection(db, 'checklists'), 
+        where('vehicleId', '==', vehicle.id),
+        orderBy('timestamp', 'desc'),
+        limit(1)
+      );
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        lastRecord = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() } as RecordEntry;
       }
+    } catch (err) {
+      console.error("Error fetching last record:", err);
     }
 
     setSelectedVehicle(vehicle);
     setOperationType(type);
-    setCurrentTab(type === 'check-out' ? 2 : 0);
+    setCurrentTab(0);
     setFormData({
       identification: {
         prefix: vehicle.prefix || 'RESERVA',
-        operationalPrefix: lastCheckIn?.identification.operationalPrefix || '',
+        operationalPrefix: lastRecord?.identification.operationalPrefix || '',
         plate: vehicle.plate,
         model: vehicle.model,
         date: format(new Date(), 'yyyy-MM-dd'),
         time: format(new Date(), 'HH:mm')
       },
       drivers: {
-        driverName: lastCheckIn?.drivers.driverName || '',
-        serviceType: lastCheckIn?.drivers.serviceType || ''
+        driverName: lastRecord?.drivers.driverName || '',
+        serviceType: lastRecord?.drivers.serviceType || ''
       },
       mileage: {
         currentMileage: '',
@@ -586,26 +583,15 @@ export default function App() {
     const driverFormatted = record.drivers.driverName.replace(/ (\d)/, ' / $1');
     const dateFormatted = record.identification.date.split('-').reverse().join('/');
     
-    const messageBody = record.type === 'check-in' 
-      ? `✅ *CHECK-IN VIATURA*\n` +
+    const messageBody = `📋 *CHECKLIST VIATURA*\n` +
         `🪙 *Pat:* ${record.identification.prefix}\n` +
         `⛔ *Placa:* ${record.identification.plate}\n` +
         `📟 *Prefixo:* ${record.identification.operationalPrefix || '---'}\n` +
         `🧮 *Emprego:* ${record.drivers.serviceType || '---'}\n` +
         `🚓 *Vtr:* ${record.identification.model}\n` +
-        `🔓 *Km inic:* ${record.mileage.currentMileage}\n` +
+        `📍 *Km Atual:* ${record.mileage.currentMileage}\n` +
         `📅 *Data:* ${dateFormatted}\n` +
-        `⌚ *Hora que armou:* ${record.identification.time}\n` +
-        `👮🏻‍♂️ *Condutor/Mat:* ${driverFormatted}`
-      : `🏁 *CHECK-OUT VIATURA*\n` +
-        `🪙 *Pat:* ${record.identification.prefix}\n` +
-        `⛔ *Placa:* ${record.identification.plate}\n` +
-        `📟 *Prefixo:* ${record.identification.operationalPrefix || '---'}\n` +
-        `🧮 *Emprego:* ${record.drivers.serviceType || '---'}\n` +
-        `🚓 *Vtr:* ${record.identification.model}\n` +
-        `🔐 *Km final:* ${record.mileage.currentMileage}\n` +
-        `📅 *Data:* ${dateFormatted}\n` +
-        `⌚ *Hora que desarmou:* ${record.identification.time}\n` +
+        `⌚ *Hora:* ${record.identification.time}\n` +
         `👮🏻‍♂️ *Condutor/Mat:* ${driverFormatted}`;
     
     return record.mileage.notes 
@@ -643,12 +629,11 @@ export default function App() {
         mileage: formData.mileage
       });
 
-      // Update vehicle status
+      // Update vehicle Last Mileage
       await updateDoc(doc(db, 'vehicles', selectedVehicle.id), {
-        status: operationType === 'check-in' ? 'in_use' : 'available',
         lastMileage: formData.mileage.currentMileage,
-        currentDriver: operationType === 'check-in' ? formData.drivers.driverName : null,
-        currentDriverEmail: operationType === 'check-in' ? user.email : null
+        currentDriver: formData.drivers.driverName,
+        currentDriverEmail: user.email
       });
 
       if (!skipWhatsApp) {
@@ -719,13 +704,13 @@ export default function App() {
             <div className="bg-white p-2 rounded-full shadow-lg border-4 border-pmpe-gold overflow-hidden w-24 h-24 flex items-center justify-center">
               <img 
                 src="https://i.pinimg.com/originals/25/fe/68/25fe6812a14bafd836f89d73a5b96663.png" 
-                alt="Logo VtrCheck Cadastro" 
+                alt="Logo CadChecking" 
                 className="w-full h-full object-contain"
                 referrerPolicy="no-referrer"
               />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">VtrCheck Cadastro</h1>
+          <h1 className="text-3xl font-bold text-slate-900 mb-2">CadChecking</h1>
           <p className="text-pmpe-blue mb-8 font-bold italic">14º BPM - Polícia Militar de Pernambuco</p>
           
           {loginError && (
@@ -797,8 +782,7 @@ export default function App() {
 
   const stats = {
     total: vehicles.length,
-    available: vehicles.filter(v => v.status === 'available').length,
-    inUse: vehicles.filter(v => v.status === 'in_use').length,
+    operational: vehicles.filter(v => v.status === 'available' || v.status === 'in_use').length,
     maintenance: vehicles.filter(v => v.status === 'maintenance').length
   };
 
@@ -811,14 +795,14 @@ export default function App() {
             <div className="bg-white p-1 rounded-lg border-2 border-pmpe-gold overflow-hidden w-10 h-10 flex items-center justify-center">
               <img 
                 src="https://i.pinimg.com/originals/25/fe/68/25fe6812a14bafd836f89d73a5b96663.png" 
-                alt="Logo VtrCheck Cadastro" 
+                alt="Logo CadChecking" 
                 className="w-full h-full object-contain"
                 referrerPolicy="no-referrer"
               />
             </div>
             <div>
               <h1 className="text-xl font-bold leading-none">14º BPM</h1>
-              <p className="text-[10px] uppercase tracking-tighter opacity-90 font-bold">VtrCheck Cadastro • PMPE</p>
+              <p className="text-[10px] uppercase tracking-tighter opacity-90 font-bold">CadChecking • PMPE</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -844,18 +828,8 @@ export default function App() {
             onClick={() => setStatusFilter(statusFilter === 'available' ? 'all' : 'available')}
             className={`flex-1 flex flex-col items-center p-2 rounded-xl transition-all ${statusFilter === 'available' ? 'bg-green-50 ring-2 ring-green-500/20' : 'hover:bg-slate-50'}`}
           >
-            <span className={`text-[9px] font-bold uppercase tracking-widest ${statusFilter === 'available' ? 'text-green-700' : 'text-slate-400'}`}>Disponíveis</span>
-            <span className="text-lg font-black text-green-600">{stats.available}</span>
-          </button>
-          
-          <div className="w-px h-8 bg-slate-100"></div>
-          
-          <button 
-            onClick={() => setStatusFilter(statusFilter === 'in_use' ? 'all' : 'in_use')}
-            className={`flex-1 flex flex-col items-center p-2 rounded-xl transition-all ${statusFilter === 'in_use' ? 'bg-blue-50 ring-2 ring-pmpe-blue/20' : 'hover:bg-slate-50'}`}
-          >
-            <span className={`text-[9px] font-bold uppercase tracking-widest ${statusFilter === 'in_use' ? 'text-pmpe-blue' : 'text-slate-400'}`}>Em Uso</span>
-            <span className="text-lg font-black text-pmpe-blue">{stats.inUse}</span>
+            <span className={`text-[9px] font-bold uppercase tracking-widest ${statusFilter === 'available' ? 'text-green-700' : 'text-slate-400'}`}>Operacionais</span>
+            <span className="text-lg font-black text-green-600">{stats.operational}</span>
           </button>
           
           <div className="w-px h-8 bg-slate-100"></div>
@@ -945,7 +919,9 @@ export default function App() {
 
                 {(() => {
                   const filtered = vehicles.filter(v => {
-                    const matchesStatus = statusFilter === 'all' || v.status === statusFilter;
+                    const matchesStatus = statusFilter === 'all' || 
+                                          (statusFilter === 'available' && (v.status === 'available' || v.status === 'in_use')) || 
+                                          v.status === statusFilter;
                     const matchesSearch = (
                       (v.plate?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
                       (v.prefix?.toLowerCase() || "reserva").includes(searchTerm.toLowerCase()) ||
@@ -958,7 +934,7 @@ export default function App() {
                     return (
                       <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200">
                         <Search className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                        <p>Nenhuma viatura encontrada {statusFilter !== 'all' ? `com status "${statusFilter === 'available' ? 'Disponível' : statusFilter === 'in_use' ? 'Em Uso' : 'Baixada'}"` : ''} para "{searchTerm}"</p>
+                        <p>Nenhuma viatura encontrada {statusFilter !== 'all' ? `com status "${statusFilter === 'available' ? 'Operacional' : 'Baixada'}"` : ''} para "{searchTerm}"</p>
                         {statusFilter !== 'all' && (
                           <button 
                             onClick={() => setStatusFilter('all')}
@@ -999,8 +975,8 @@ export default function App() {
                               </span>
                             </div>
                             <p className="text-sm text-slate-500">{vehicle.model}</p>
-                            {vehicle.status === 'in_use' && vehicle.currentDriver && (
-                              <p className="text-xs font-medium text-pmpe-red mt-1 flex items-center gap-1">
+                            {vehicle.currentDriver && (
+                              <p className="text-xs font-medium text-slate-500 mt-1 flex items-center gap-1">
                                 <UserIcon className="w-3 h-3" />
                                 {vehicle.currentDriver}
                               </p>
@@ -1009,41 +985,25 @@ export default function App() {
                         </div>
                         <div className="text-right">
                           <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider mb-1 ${
-                            vehicle.status === 'available' ? 'bg-blue-100 text-pmpe-blue' : 
-                            vehicle.status === 'maintenance' ? 'bg-amber-100 text-amber-600' :
-                            'bg-red-100 text-pmpe-red'
+                            vehicle.status === 'maintenance' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-pmpe-blue'
                           }`}>
-                            {vehicle.status === 'available' ? 'Disponível' : 
-                             vehicle.status === 'maintenance' ? 'Baixada' : 
-                             'Em Uso'}
+                            {vehicle.status === 'maintenance' ? 'Baixada' : 'Operacional'}
                           </span>
                           <p className="text-xs font-mono text-slate-400">{vehicle.lastMileage} KM</p>
                         </div>
                       </div>
                       
-                      {(vehicle.status === 'available' || 
-                        (isAdmin && vehicle.status === 'maintenance') ||
-                        (vehicle.status === 'in_use' && (isAdmin || vehicle.currentDriverEmail === user?.email))
-                      ) && (
+                      {(vehicle.status !== 'maintenance' || isAdmin) && (
                         <div className="bg-slate-50 px-5 py-3 flex gap-2 border-t border-slate-100">
-                          {vehicle.status === 'available' && (
-                            <button 
-                              onClick={() => handleStartRecord(vehicle, 'check-in')}
-                              className="flex-1 bg-pmpe-blue text-white py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-pmpe-dark transition-colors flex items-center justify-center gap-2"
-                            >
-                              <ArrowLeftRight className="w-4 h-4" />
-                              Check-in (Retirada)
-                            </button>
-                          )}
-                          {vehicle.status === 'in_use' && (isAdmin || vehicle.currentDriverEmail === user?.email) && (
-                            <button 
-                              onClick={() => handleStartRecord(vehicle, 'check-out')}
-                              className="flex-1 bg-pmpe-red text-white py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                              Check-out (Devolução)
-                            </button>
-                          )}
+                          <button 
+                            onClick={() => handleStartRecord(vehicle, 'checklist')}
+                            disabled={vehicle.status === 'maintenance' && !isAdmin}
+                            className="flex-1 bg-pmpe-blue text-white py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-pmpe-dark transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <ClipboardList className="w-4 h-4" />
+                            Realizar Checklist
+                          </button>
+                          
                           {isAdmin && (
                             <button 
                               onClick={() => handleToggleMaintenance(vehicle)}
@@ -1054,7 +1014,7 @@ export default function App() {
                               }`}
                             >
                               <AlertCircle className="w-4 h-4" />
-                              {vehicle.status === 'maintenance' ? 'Ativar' : 'Baixar'}
+                              {vehicle.status === 'maintenance' ? 'Reativar' : 'Baixar'}
                             </button>
                           )}
                         </div>
@@ -1080,16 +1040,10 @@ export default function App() {
                     Todos
                   </button>
                   <button 
-                    onClick={() => setHistoryFilter('check-in')}
-                    className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${historyFilter === 'check-in' ? 'bg-pmpe-blue text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200'}`}
+                    onClick={() => setHistoryFilter('checklist')}
+                    className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${historyFilter === 'checklist' ? 'bg-pmpe-blue text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200'}`}
                   >
-                    Check-in
-                  </button>
-                  <button 
-                    onClick={() => setHistoryFilter('check-out')}
-                    className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${historyFilter === 'check-out' ? 'bg-pmpe-red text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200'}`}
-                  >
-                    Check-out
+                    Checklist
                   </button>
                   <button 
                     onClick={() => setHistoryFilter('maintenance')}
@@ -1103,6 +1057,7 @@ export default function App() {
                   const filteredHistory = history.filter(record => {
                     if (historyFilter === 'all') return true;
                     if (historyFilter === 'maintenance') return record.type.includes('maintenance');
+                    if (historyFilter === 'checklist') return record.type === 'checklist' || record.type === 'check-in' || record.type === 'check-out';
                     return record.type === historyFilter;
                   });
 
@@ -1132,13 +1087,11 @@ export default function App() {
                           className="p-4 flex items-start gap-4 cursor-pointer hover:bg-slate-50 transition-colors"
                         >
                           <div className={`p-2 rounded-lg shrink-0 ${
-                            record.type === 'check-in' ? 'bg-blue-50 text-pmpe-blue' : 
                             record.type.includes('maintenance') ? 'bg-amber-50 text-amber-600' :
-                            'bg-red-50 text-pmpe-red'
+                            'bg-blue-50 text-pmpe-blue'
                           }`}>
-                            {record.type === 'check-in' ? <ArrowLeftRight className="w-5 h-5" /> : 
-                             record.type.includes('maintenance') ? <AlertCircle className="w-5 h-5" /> :
-                             <CheckCircle2 className="w-5 h-5" />}
+                            {record.type.includes('maintenance') ? <AlertCircle className="w-5 h-5" /> :
+                             <ClipboardList className="w-5 h-5" />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-start mb-1">
@@ -1151,14 +1104,13 @@ export default function App() {
                                     {record.identification.operationalPrefix || 'SEM PREFIXO OP.'}
                                   </p>
                                   <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase ${
-                                    record.type === 'check-in' ? 'bg-blue-100 text-pmpe-blue' : 
                                     record.type.includes('maintenance') ? 'bg-amber-100 text-amber-600' :
-                                    'bg-red-100 text-pmpe-red'
+                                    record.type === 'check-out' ? 'bg-red-100 text-pmpe-red' :
+                                    'bg-blue-100 text-pmpe-blue'
                                   }`}>
-                                    {record.type === 'check-in' ? 'IN' : 
-                                     record.type === 'maintenance-in' ? 'BAIXA' :
+                                    {record.type === 'maintenance-in' ? 'BAIXA' :
                                      record.type === 'maintenance-out' ? 'ALTA' :
-                                     'OUT'}
+                                     'CHECKLIST'}
                                   </span>
                                 </div>
                               </div>
@@ -1549,7 +1501,7 @@ export default function App() {
                     >
                       <div>
                         <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                          {operationType === 'check-in' ? 'Quilometragem Inicial' : 'Quilometragem Final'} (KM)
+                          Quilometragem Atual (KM)
                         </label>
                         <div className="relative">
                           <Gauge className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
