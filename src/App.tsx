@@ -599,10 +599,22 @@ export default function App() {
       : messageBody;
   };
 
+  const openWhatsApp = (message: string) => {
+    const encodedMessage = encodeURIComponent(message);
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    // Using wa.me for mobile and web.whatsapp.com for desktop
+    // This avoids the 'install whatsapp' splash screen on desktop
+    const baseUrl = isMobile 
+      ? 'https://wa.me/' 
+      : 'https://web.whatsapp.com/send';
+    
+    window.open(`${baseUrl}?text=${encodedMessage}`, '_blank');
+  };
+
   const handleResendWhatsApp = (record: RecordEntry) => {
     const message = formatWhatsAppMessage(record);
-    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
+    openWhatsApp(message);
   };
 
   const handleSaveRecord = async (skipWhatsApp = false) => {
@@ -652,8 +664,7 @@ export default function App() {
         const finalMessage = formatWhatsAppMessage(recordToFormat);
 
         // Open WhatsApp using the most compatible API
-        const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(finalMessage)}`;
-        window.open(whatsappUrl, '_blank');
+        openWhatsApp(finalMessage);
       }
 
       // Reset form
